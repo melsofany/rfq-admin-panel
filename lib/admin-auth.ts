@@ -4,6 +4,9 @@ const TOKEN_KEY = 'admin_access_token';
 const USER_KEY = 'admin_user';
 const ADMIN_KEY = 'admin_role';
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -39,10 +42,22 @@ function clearSession() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
+function edgeUrl(action: string) {
+  return `${SUPABASE_URL}/functions/v1/admin-auth/${action}`;
+}
+
+function edgeHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'apikey': SUPABASE_ANON_KEY,
+  };
+}
+
 export async function adminLogin(email: string, password: string) {
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch(edgeUrl('login'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: edgeHeaders(),
     body: JSON.stringify({ email, password }),
   });
 
@@ -59,9 +74,9 @@ export async function adminGetSession(): Promise<{ user: AdminUser | null; admin
   if (!stored) return { user: null, admin: null };
 
   try {
-    const res = await fetch('/api/auth/session', {
+    const res = await fetch(edgeUrl('session'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: edgeHeaders(),
       body: JSON.stringify({ access_token: stored.accessToken }),
     });
 
@@ -89,9 +104,9 @@ export async function adminRefreshToken(): Promise<string | null> {
 
 export async function adminLogout() {
   try {
-    await fetch('/api/auth/logout', {
+    await fetch(edgeUrl('logout'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: edgeHeaders(),
     });
   } catch {}
   clearSession();

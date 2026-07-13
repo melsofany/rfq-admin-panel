@@ -4,6 +4,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: { unoptimized: true },
+  generateBuildId: () => 'build-' + Date.now(),
 };
 
 module.exports = nextConfig;

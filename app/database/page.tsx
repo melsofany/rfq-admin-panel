@@ -18,13 +18,13 @@ import { Button } from '@/components/ui/button';
 
 const DB_INFO = {
   name: 'postgres',
-  host: '0ec90b57d6e95fcbda19832f.supabase.co',
+  host: 'Render PostgreSQL (internal)',
   port: 5432,
   user: 'postgres',
-  databaseId: '0ec90b57d6e95fcbda19832f',
-  plan: 'Supabase Free',
-  region: 'us-east-1',
-  version: '15',
+  databaseId: 'dpg-d9a0q8d8nd3s73a9n6og-a',
+  plan: 'Render',
+  region: 'render',
+  version: '15+',
 };
 
 const TABLES_TO_COUNT = [

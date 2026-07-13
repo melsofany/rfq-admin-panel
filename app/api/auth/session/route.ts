@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rfq-admin-secret-key-2026-change-in-production';
+function getSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ user: null, admin: null }, { status: 200 });
     }
 
-    const decoded = jwt.verify(access_token, JWT_SECRET) as any;
+    const decoded = jwt.verify(access_token, getSecret()) as any;
     if (!decoded || decoded.type !== 'admin') {
       return NextResponse.json({ user: null, admin: null }, { status: 200 });
     }

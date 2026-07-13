@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rfq-admin-secret-key-2026-change-in-production';
+function getSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 
 function verifyToken(req: NextRequest): any | null {
   const auth = req.headers.get('authorization');
   if (!auth || !auth.startsWith('Bearer ')) return null;
   const token = auth.slice(7);
   try {
-    return jwt.verify(token, JWT_SECRET) as any;
+    return jwt.verify(token, getSecret()) as any;
   } catch {
     return null;
   }

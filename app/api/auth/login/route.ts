@@ -3,7 +3,11 @@ import { query } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rfq-admin-secret-key-2026-change-in-production';
+function getSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+}
 const SESSION_DURATION = '7d';
 
 export async function POST(req: NextRequest) {
@@ -31,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     const token = jwt.sign(
       { sub: admin.id, email: admin.email, role: admin.role, type: 'admin' },
-      JWT_SECRET,
+      getSecret(),
       { expiresIn: SESSION_DURATION }
     );
 

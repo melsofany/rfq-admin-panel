@@ -78,7 +78,8 @@ export async function adminGetSession(): Promise<{ user: AdminUser | null; admin
 
     return { user: data.user, admin: data.admin };
   } catch {
-    return { user: stored.user, admin: stored.admin };
+    clearSession();
+    return { user: null, admin: null };
   }
 }
 

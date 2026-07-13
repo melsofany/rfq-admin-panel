@@ -16,34 +16,20 @@ export async function POST(req: NextRequest) {
 
       `CREATE TABLE IF NOT EXISTS subscription_plans (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        name text NOT NULL,
-        slug text NOT NULL UNIQUE,
-        price numeric(10,2) NOT NULL DEFAULT 0,
+        name text NOT NULL UNIQUE,
+        name_ar text,
+        description text,
+        price_monthly numeric(10,2) NOT NULL DEFAULT 0,
+        price_yearly numeric(10,2) NOT NULL DEFAULT 0,
+        max_employees int NOT NULL DEFAULT 5,
         max_suppliers int NOT NULL DEFAULT 50,
-        max_rfqs int NOT NULL DEFAULT 100,
-        max_users int NOT NULL DEFAULT 5,
+        max_rfqs_per_month int NOT NULL DEFAULT 100,
+        max_purchase_orders int NOT NULL DEFAULT 50,
         features jsonb NOT NULL DEFAULT '[]'::jsonb,
         is_active boolean NOT NULL DEFAULT true,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )`,
-
-      `CREATE TABLE IF NOT EXISTS subscriptions (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id uuid,
-        plan_id uuid REFERENCES subscription_plans(id),
-        status text NOT NULL DEFAULT 'active',
-        billing_cycle text DEFAULT 'monthly',
-        current_period_end timestamptz,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )`,
-
-      `CREATE TABLE IF NOT EXISTS saas_admins (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        email text NOT NULL UNIQUE,
-        password_hash text NOT NULL,
-        role text NOT NULL DEFAULT 'super_admin',
-        is_active boolean NOT NULL DEFAULT true,
-        created_at timestamptz NOT NULL DEFAULT now()
+        sort_order int NOT NULL DEFAULT 0,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS organizations (
@@ -51,65 +37,124 @@ export async function POST(req: NextRequest) {
         name text NOT NULL,
         name_ar text,
         slug text NOT NULL UNIQUE,
+        email text NOT NULL,
         phone text,
         address text,
-        country text DEFAULT 'Egypt',
+        country text,
+        plan_id uuid REFERENCES subscription_plans(id),
         status text NOT NULL DEFAULT 'active',
+        trial_ends_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS subscriptions (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        plan_id uuid NOT NULL REFERENCES subscription_plans(id),
+        status text NOT NULL DEFAULT 'active',
+        billing_cycle text NOT NULL DEFAULT 'monthly',
+        current_period_start timestamptz,
+        current_period_end timestamptz,
+        cancel_at_period_end boolean NOT NULL DEFAULT false,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS org_users (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text NOT NULL UNIQUE,
+        password_hash text NOT NULL,
+        full_name text,
+        is_active boolean NOT NULL DEFAULT true,
         created_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS organization_members (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        user_id uuid NOT NULL,
+        user_id uuid NOT NULL REFERENCES org_users(id) ON DELETE CASCADE,
         email text NOT NULL,
         role text NOT NULL DEFAULT 'purchasing',
         is_active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE(org_id, user_id)
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS saas_admins (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        email text NOT NULL UNIQUE,
+        password_hash text NOT NULL,
+        role text NOT NULL DEFAULT 'admin',
+        is_active boolean NOT NULL DEFAULT true,
         created_at timestamptz NOT NULL DEFAULT now()
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS company_settings (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        org_id uuid NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
+        name_en text,
+        name_ar text,
+        logo_url text,
+        address text,
+        phone text,
+        email text,
+        tax_number text,
+        currency text DEFAULT 'USD',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS suppliers (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        supplier_id text,
         name text NOT NULL,
-        name_ar text,
+        contact_person text,
         email text,
         phone text,
         address text,
-        category text,
-        contact_person text,
-        notes text,
-        created_at timestamptz NOT NULL DEFAULT now()
+        category text NOT NULL DEFAULT 'general',
+        is_active boolean NOT NULL DEFAULT true,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS supplier_categories (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         name text NOT NULL,
-        created_at timestamptz NOT NULL DEFAULT now()
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE(org_id, name)
       )`,
 
       `CREATE TABLE IF NOT EXISTS items (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        name text NOT NULL,
+        item_id text,
         part_no text,
-        description text,
-        uom text DEFAULT 'piece',
+        description text NOT NULL,
+        uom text,
         reference_price numeric(15,4),
+        category text,
         created_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS rfqs (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        rfq_no text NOT NULL,
-        title text,
+        internal_rfq_no text NOT NULL,
+        customer_rfq_no text NOT NULL,
+        customer_rfq_date text,
+        required_response_date text,
         status text NOT NULL DEFAULT 'draft',
-        close_date timestamptz,
-        notes text,
         created_by uuid REFERENCES organization_members(id),
-        created_at timestamptz NOT NULL DEFAULT now()
+        notes text,
+        expires_at timestamptz,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE(org_id, internal_rfq_no)
       )`,
 
       `CREATE TABLE IF NOT EXISTS rfq_items (
@@ -163,7 +208,7 @@ export async function POST(req: NextRequest) {
         rfq_item_id uuid NOT NULL REFERENCES rfq_items(id),
         price numeric(15,4) NOT NULL,
         tax_included boolean NOT NULL DEFAULT false,
-        delivery_time text,
+        delivery_days int,
         notes text,
         created_at timestamptz NOT NULL DEFAULT now()
       )`,
@@ -171,58 +216,44 @@ export async function POST(req: NextRequest) {
       `CREATE TABLE IF NOT EXISTS purchase_orders (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        po_no text NOT NULL,
-        rfq_id uuid REFERENCES rfqs(id),
-        offer_id uuid REFERENCES offers(id),
-        supplier_id uuid REFERENCES suppliers(id),
+        internal_po_no text NOT NULL,
+        external_po_no text NOT NULL,
+        receiver_name text,
+        receiver_phone text,
         status text NOT NULL DEFAULT 'draft',
-        total_amount numeric(15,4),
-        notes text,
         created_by uuid REFERENCES organization_members(id),
-        created_at timestamptz NOT NULL DEFAULT now()
+        notes text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE(org_id, internal_po_no)
       )`,
 
       `CREATE TABLE IF NOT EXISTS purchase_order_items (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         po_id uuid NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
-        rfq_item_id uuid REFERENCES rfq_items(id),
+        item_id text,
+        line_item text,
+        part_no text,
         description text NOT NULL,
-        qty numeric(15,4) NOT NULL DEFAULT 1,
         uom text,
-        unit_price numeric(15,4) NOT NULL DEFAULT 0,
-        total_price numeric(15,4) NOT NULL DEFAULT 0,
+        qty numeric(15,4),
+        reference_price numeric(15,4),
+        tax_included boolean NOT NULL DEFAULT false,
+        supplier_id uuid REFERENCES suppliers(id),
         created_at timestamptz NOT NULL DEFAULT now()
       )`,
 
       `CREATE TABLE IF NOT EXISTS audit_log (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-        user_id uuid,
         action text NOT NULL,
         entity_type text,
         entity_id uuid,
-        details jsonb,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )`,
-
-      `CREATE TABLE IF NOT EXISTS company_settings (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        org_id uuid NOT NULL UNIQUE REFERENCES organizations(id) ON DELETE CASCADE,
-        logo_url text,
-        primary_color text DEFAULT '#2563eb',
-        currency text DEFAULT 'USD',
-        tax_rate numeric(5,2) DEFAULT 0,
-        email_notifications boolean NOT NULL DEFAULT true,
-        created_at timestamptz NOT NULL DEFAULT now()
-      )`,
-
-      `CREATE TABLE IF NOT EXISTS org_users (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        email text NOT NULL UNIQUE,
-        password_hash text NOT NULL,
-        full_name text,
-        is_active boolean NOT NULL DEFAULT true,
+        member_id uuid REFERENCES organization_members(id),
+        description text NOT NULL,
+        ip_address text,
+        user_agent text,
         created_at timestamptz NOT NULL DEFAULT now()
       )`,
     ];
@@ -237,21 +268,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Insert default subscription plans
     try {
       await query(`
-        INSERT INTO subscription_plans (name, slug, price, max_suppliers, max_rfqs, max_users, features)
+        INSERT INTO subscription_plans (name, name_ar, description, price_monthly, price_yearly, max_employees, max_suppliers, max_rfqs_per_month, max_purchase_orders, features, sort_order)
         VALUES
-          ('Free', 'free', 0, 10, 20, 2, '["Basic RFQ management","Up to 10 suppliers","2 team members"]'),
-          ('Pro', 'pro', 49, 100, 500, 10, '["Unlimited RFQs","Up to 100 suppliers","10 team members","Analytics","Custom branding"]'),
-          ('Enterprise', 'enterprise', 199, 999999, 999999, 999999, '["Everything in Pro","Unlimited suppliers","Unlimited users","Priority support","API access","Custom integrations"]')
-        ON CONFLICT (slug) DO NOTHING
+          ('Free', 'مجاني', 'Get started with basic RFQ management', 0, 0, 3, 20, 20, 10,
+           '["Dashboard","RFQ Management (up to 20/month)","Suppliers (up to 20)","Purchase Orders (up to 10)","Basic Analytics"]'::jsonb, 0),
+          ('Pro', 'احترافي', 'For growing procurement teams', 49, 490, 15, 200, 500, 200,
+           '["Everything in Free","RFQ Management (up to 500/month)","Suppliers (up to 200)","Purchase Orders (up to 200)","Advanced Analytics","WhatsApp Integration","Google Sheets Sync","PDF Export"]'::jsonb, 1),
+          ('Enterprise', 'مؤسسات', 'For large organizations with custom needs', 199, 1990, 100, 999999, 999999, 999999,
+           '["Everything in Pro","Unlimited Employees","Unlimited Suppliers","Unlimited RFQs","Unlimited POs","Custom Branding","Priority Support","API Access","Audit Logs"]'::jsonb, 2)
+        ON CONFLICT (name) DO NOTHING
       `);
     } catch (err: any) {
       errors.push(`Plans: ${err.message}`);
     }
 
-    // Insert default admin user
     try {
       const passwordHash = await bcrypt.hash('Admin2026!', 10);
       await query(`

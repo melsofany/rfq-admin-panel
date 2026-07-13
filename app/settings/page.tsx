@@ -35,10 +35,9 @@ import {
 
 interface AdminRow {
   id: string;
-  user_id: string;
+  email: string;
   role: string;
   created_at: string;
-  email: string;
 }
 
 interface PlatformStats {
@@ -57,8 +56,8 @@ export default function SettingsPage() {
   const [actionLoading, setActionLoading] = useState(false);
 
   // Add admin
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminUserId, setAdminUserId] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [addSuccess, setAddSuccess] = useState<string | null>(null);
 
@@ -90,7 +89,7 @@ export default function SettingsPage() {
 
       // Fetch admins
       const adminData = await adminQuery<AdminRow>('saas_admins', {
-        select: 'id, user_id, role, created_at',
+        select: 'id, email, role, created_at',
         order: { column: 'created_at', ascending: false },
       });
 
@@ -113,30 +112,36 @@ export default function SettingsPage() {
     setActionLoading(true);
 
     try {
-      const userId = adminEmail || adminUserId;
-      if (!userId) {
-        setAddError('Please enter a user email or user ID.');
+      if (!newAdminEmail || !newAdminPassword) {
+        setAddError('Please enter both email and password.');
         setActionLoading(false);
         return;
       }
 
-      // Check if already admin (by user_id)
       const existing = await adminQuery<{ id: string }>('saas_admins', {
         select: 'id',
-        eq: { user_id: userId },
+        eq: { email: newAdminEmail.toLowerCase() },
       });
 
       if (existing && existing.length > 0) {
-        setAddError('This user is already a SaaS admin.');
+        setAddError('This email is already a SaaS admin.');
         setActionLoading(false);
         return;
       }
 
-      await adminInsert('saas_admins', { user_id: userId, role: 'admin' });
+      const res = await fetch('/api/auth/create-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newAdminEmail, password: newAdminPassword }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create admin');
+      }
 
-      setAddSuccess(`Successfully added ${userId} as SaaS admin.`);
-      setAdminEmail('');
-      setAdminUserId('');
+      setAddSuccess(`Successfully added ${newAdminEmail} as SaaS admin.`);
+      setNewAdminEmail('');
+      setNewAdminPassword('');
       await fetchAll();
     } catch (err: any) {
       setAddError(err?.message || 'Failed to add admin.');
@@ -273,14 +278,29 @@ export default function SettingsPage() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-2">
-                <Label htmlFor="admin-email">User Email or User ID</Label>
+                <Label htmlFor="admin-email">Admin Email</Label>
                 <Input
                   id="admin-email"
-                  type="text"
-                  placeholder="user@example.com or user-uuid"
-                  value={adminEmail}
+                  type="email"
+                  placeholder="newadmin@example.com"
+                  value={newAdminEmail}
                   onChange={(e) => {
-                    setAdminEmail(e.target.value);
+                    setNewAdminEmail(e.target.value);
+                    setAddError(null);
+                    setAddSuccess(null);
+                  }}
+                  disabled={actionLoading}
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="admin-password">Password</Label>
+                <Input
+                  id="admin-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newAdminPassword}
+                  onChange={(e) => {
+                    setNewAdminPassword(e.target.value);
                     setAddError(null);
                     setAddSuccess(null);
                   }}
@@ -289,7 +309,7 @@ export default function SettingsPage() {
               </div>
               <Button
                 onClick={handleAddAdmin}
-                disabled={actionLoading || !adminEmail}
+                disabled={actionLoading || !newAdminEmail || !newAdminPassword}
                 className="sm:w-auto"
               >
                 {actionLoading ? (
@@ -341,7 +361,7 @@ export default function SettingsPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium">
-                          {admin.email || `User: ${admin.user_id.slice(0, 12)}…`}
+                          {admin.email}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Added {new Date(admin.created_at).toLocaleDateString()}
@@ -408,7 +428,7 @@ export default function SettingsPage() {
             <AlertDialogDescription>
               Are you sure you want to remove{' '}
               <strong>
-                {deleteAdmin?.email || `User: ${deleteAdmin?.user_id.slice(0, 12)}…`}
+                {deleteAdmin?.email}
               </strong>{' '}
               from SaaS admins? They will lose access to the admin panel.
             </AlertDialogDescription>

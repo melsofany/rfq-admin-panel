@@ -1,11 +1,23 @@
 import { Pool } from 'pg';
 
+function getSSLConfig() {
+  const url = process.env.DATABASE_URL || '';
+  if (url.includes('render.com')) {
+    return { rejectUnauthorized: false };
+  }
+  return false;
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 5,
+  ssl: getSSLConfig(),
+  max: 3,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: 15000,
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected pool error:', err.message);
 });
 
 export async function query(text: string, params?: any[]) {
